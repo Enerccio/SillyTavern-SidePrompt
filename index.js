@@ -1182,7 +1182,7 @@ class SideQuery {
     }
 
     showSaveAsPopover() {
-        const $popover = this.$root.find('.enerccio_sidequery_popover');
+        const $popover = this.$root.find('.enerccio_sidequery_options_popover');
         const $input = $popover.find('.enerccio_sidequery_popover_input');
 
         $input.val(this.$savedPrompts.val() || '');
