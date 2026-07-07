@@ -1310,6 +1310,31 @@ class SideQuery {
                 if (reasoning)
                     m.setReasoning(reasoning, performance.now() - reasoningTime, reasoningDone);
             }
+
+            if (!document.hasFocus()) {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const audioCtx = new AudioContext();
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(987.77, audioCtx.currentTime);
+
+                        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.4);
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+
+                        oscillator.start();
+                        oscillator.stop(audioCtx.currentTime + 0.4);
+                    }
+                } catch (soundErr) {
+                    console.warn("SideQuery: Audio chime playback failed", soundErr);
+                }
+            }
         } catch (aborted) {
             if (aborted === 'userStopped') {
                 log('Query generation aborted by user');
