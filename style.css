@@ -29,34 +29,129 @@
     height: min(90dvh, 720px);
 }
 
+#movingDivs #enerccio_sidequery_query,
+#enerccio_sidequery_query.drawer-content {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important; /* Lets panel sit compact when empty or low-content */
+    max-height: min(90dvh, 720px) !important; /* Structural ceiling boundary limit */
+    overflow: hidden !important;
+}
+
+/* Tier 2: Floating Master Frame Wrapper */
 #enerccio_sidequery_query_content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
 }
 
-#enerccio_sidequery_query_content > .inline-drawer {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
+/* Tier 3: Inner Drawer Structural Box */
+#enerccio_sidequery_query_content .inline-drawer {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
 }
 
+/* Tier 4: Intermediate Drawer Content Compartment.
+   CRITICAL: Changed to a direct child combinator (>) to protect internal tabs from !important display loops! */
+#enerccio_sidequery_query_content > .inline-drawer > .inline-drawer-content {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Tier 5: Tabs Master Allocation Display Rack */
+#enerccio_sidequery_tabs_tabcontent {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Tier 6: Individual Active Tab Workspace Panels.
+   NO !important on display! Allows inline style="display: none;" to toggle background tabs out of sight. */
 .enerccio_sidequery_query_body {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: 80vh;
-    overflow: hidden;
     display: flex;
-    flex-direction: column;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden !important;
 }
 
+/* =========================================================================
+   DYNAMIC INTERNAL REGIONS
+   ========================================================================= */
+
+/* The Conversation History Log: Shrinks dynamically when your text box or files grow */
 .enerccio_sidequery_response {
-    overflow-y: auto;
-    flex: 0 1 auto;
-    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
+/* Input Controls Tray: Securely anchored to the bottom row boundary floor line */
+.enerccio_sidequery_controls {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 0 0 auto !important; /* Shuts down input area expansion distortion */
+    height: auto !important;
+    min-height: 0 !important;
+    margin-top: auto !important;
+    box-sizing: border-box;
+}
+
+/* Input panel layout controls */
+.enerccio_sidequery_user_input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 45px;
+    max-height: 100px;
+}
+
+/* Single-row scrollable file attachment rack */
+.enerccio_sidequery_input_attachments,
+.enerccio_sidequery_edit_attachments_container {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    width: 100%;
+    gap: 8px;
+    padding: 4px 2px;
+    box-sizing: border-box;
+    flex: 0 0 auto !important;
+}
+
+/* Low-profile sliders for pending file arrays */
+.enerccio_sidequery_input_attachments::-webkit-scrollbar,
+.enerccio_sidequery_edit_attachments_container::-webkit-scrollbar {
+    height: 4px;
+}
+.enerccio_sidequery_input_attachments::-webkit-scrollbar-thumb,
+.enerccio_sidequery_edit_attachments_container::-webkit-scrollbar-thumb {
+    background: var(--SmartThemeBorderColor);
+    border-radius: 2px;
+}
+
+.enerccio_sidequery_attachment_item {
+    flex: 0 0 60px !important;
+    box-sizing: border-box;
 }
 
 .enerccio_sidequery_controls {

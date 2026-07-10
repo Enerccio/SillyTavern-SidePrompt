@@ -49,6 +49,7 @@ class SideQueryMessage {
         this.included = true;
         this.genInfoText = "";
         this._updateTimeout = null;
+        this.attachments = []; // Binary Base64 attachments repository
     }
 
     static fromJSON(data) {
@@ -60,6 +61,7 @@ class SideQueryMessage {
         message.reasoningFinished = data.reasoningFinished;
         message.included = data.included !== undefined ? data.included : true;
         message.genInfoText = data.genInfoText || "";
+        message.attachments = data.attachments || [];
         return message;
     }
 
@@ -72,16 +74,18 @@ class SideQueryMessage {
             reasoningFinished: this.reasoningFinished,
             included: this.included,
             genInfoText: this.genInfoText,
+            attachments: this.attachments,
         };
     }
 
-    static fromUser(val) {
+    static fromUser(val, attachments = []) {
         const message = new SideQueryMessage();
         message.from_user = true;
         message.contents = val;
         message.reasoning = undefined;
         message.included = true;
         message.genInfoText = "";
+        message.attachments = attachments;
         return message;
     }
 
@@ -114,19 +118,16 @@ class SideQueryMessage {
             }
         });
 
-        // Anchor: Scroll until the bottom bounding line of this card is perfectly aligned with the screen container view
         this.$element.find('.enerccio_sidequery_message_scroll_bottom').on('click', (e) => {
             e.stopPropagation();
             this.$element[0].scrollIntoView({ behavior: 'smooth', block: 'end' });
         });
 
-        // Anchor: Scroll until the top bounding line of this card snaps back to the view ceiling
         this.$element.find('.enerccio_sidequery_message_scroll_top').on('click', (e) => {
             e.stopPropagation();
             this.$element[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
 
-        // Wire up click event for the toggle eye button
         const $toggleBtn = this.$element.find('.enerccio_sidequery_message_toggle');
         $toggleBtn.on('click', async () => {
             this.included = !this.included;
@@ -137,7 +138,6 @@ class SideQueryMessage {
             }
         });
 
-        // Wire up click event for the inline text editor button
         const $editBtn = this.$element.find('.enerccio_sidequery_message_edit');
         $editBtn.on('click', (e) => {
             if (sideQueryInstance && sideQueryInstance.isGenerating()) return;
@@ -145,7 +145,6 @@ class SideQueryMessage {
 
             const $contentContainer = this.$element.find('.enerccio_sidequery_message_content');
 
-            // If already in editing state, ignore or toggle back
             if ($contentContainer.find('textarea').length > 0) return;
 
             const currentRawText = this.contents;
@@ -154,15 +153,80 @@ class SideQueryMessage {
             $contentContainer.empty().append($textarea);
             $textarea.focus();
 
-            // Block input typing events from triggering parent shortcuts or layout drag handles
             $textarea.on('click mousedown mouseup keydown keyup', (ev) => {
                 ev.stopPropagation();
             });
 
+            let tempAttachments = this.attachments ? [...this.attachments] : [];
+
+            const renderEditAttachments = () => {
+                $contentContainer.find('.enerccio_sidequery_edit_attachments_container').remove();
+                if (!this.from_user) return;
+
+                const $editAttachDiv = $('<div class="enerccio_sidequery_edit_attachments_container"></div>');
+                tempAttachments.forEach((att, idx) => {
+                    const $item = $('<div class="enerccio_sidequery_attachment_item" style="position:relative; display:flex; flex-direction:column; align-items:center; width:60px; border:1px solid var(--SmartThemeBorderColor); padding:4px; border-radius:4px; background:var(--black30a);"></div>');
+                    if (att.type && att.type.startsWith('image/')) {
+                        $item.append(`<img src="data:${att.type};base64,${att.data}" style="width:50px; height:50px; object-fit:cover; border-radius:2px;"/>`);
+                    } else {
+                        $item.append(`<i class="fa-solid fa-file" style="font-size:24px; margin:13px 0;"></i>`);
+                    }
+                    $item.append(`<span style="font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;" title="${att.name}">${att.name}</span>`);
+
+                    const $delBtn = $('<button type="button" style="position:absolute; top:-4px; right:-4px; background:#ff4d4d; color:white; border:none; border-radius:5px; width:14px; height:14px; font-size:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">&times;</button>');
+
+                    // Retain focus on textarea during deletion via mousedown override
+                    $delBtn.on('mousedown', (ev) => {
+                        ev.preventDefault();
+                    });
+                    $delBtn.on('click', (ev) => {
+                        ev.stopPropagation();
+                        tempAttachments.splice(idx, 1);
+                        renderEditAttachments();
+                    });
+                    $item.append($delBtn);
+                    $editAttachDiv.append($item);
+                });
+                $contentContainer.append($editAttachDiv);
+            };
+
+            if (this.from_user) {
+                renderEditAttachments();
+
+                // Inline Editor Drag and Drop (User Messages Only)
+                $textarea.on('dragover dragenter', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                });
+                $textarea.on('drop', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const files = ev.originalEvent.dataTransfer.files;
+                    if (files && files.length > 0) {
+                        for (let i = 0; i < files.length; i++) {
+                            const file = files[i];
+                            const reader = new FileReader();
+                            reader.onload = (uploadEvent) => {
+                                const base64Data = uploadEvent.target.result.split(',')[1];
+                                tempAttachments.push({
+                                    name: file.name,
+                                    type: file.type,
+                                    data: base64Data
+                                });
+                                renderEditAttachments();
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    }
+                });
+            }
+
             const saveEditedMessage = async () => {
                 this.contents = $textarea.val();
+                if (this.from_user) {
+                    this.attachments = tempAttachments;
+                }
 
-                // Redraw formatted message block node
                 this._update();
 
                 if (sideQueryInstance) {
@@ -173,47 +237,39 @@ class SideQueryMessage {
 
             $textarea.on('blur', saveEditedMessage);
             $textarea.on('keydown', (ev) => {
-                // Save on Ctrl+Enter or Cmd+Enter
                 if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-                    $textarea.off('blur'); // Bypass blur execution collision
+                    $textarea.off('blur');
                     saveEditedMessage();
                 } else if (ev.key === 'Escape') {
                     $textarea.off('blur');
-                    this._update(); // Restore old state
+                    this._update();
                 }
             });
         });
 
-        // --- PDF Filter Dropdown Controller Implementation ---
         const $pdfContainer = this.$element.find('.enerccio_sidequery_pdf_dropdown');
         const $pdfToggleBtn = $pdfContainer.find('.enerccio_sidequery_message_pdf_toggle');
         const $pdfMenu = $pdfContainer.find('.enerccio_sidequery_pdf_menu');
 
-        // Toggle the dropdown layout open/closed on button click
         $pdfToggleBtn.on('click', (e) => {
             e.stopPropagation();
-            // Close any other open export panels first
             $('.enerccio_sidequery_pdf_menu').not($pdfMenu).removeClass('show');
             $pdfMenu.toggleClass('show');
         });
 
-        // Close the panel if the user clicks anywhere outside of it
         $(document).on('click.pdf-menu-hide', (e) => {
             if (!$(e.target).closest($pdfContainer).length) {
                 $pdfMenu.removeClass('show');
             }
         });
 
-        // Monitor selection routing hooks for custom layout choices
         $pdfMenu.find('.pdf-menu-item').on('click', async (e) => {
             e.stopPropagation();
-            $pdfMenu.removeClass('show'); // Hide options bar
+            $pdfMenu.removeClass('show');
 
             if (!sideQueryInstance || !sideQueryInstance.container) return;
 
             const exportType = $(e.currentTarget).data('type');
-
-            // Map criteria variables based on menu data tracking attributes
             const includeReasoning = exportType === 'complete' || exportType === 'no-user';
             const includeUserPrompts = exportType === 'complete' || exportType === 'no-reasoning';
 
@@ -226,7 +282,6 @@ class SideQueryMessage {
                 if (targetIndex === -1) return;
 
                 const $printArea = $('<div class="pdf-print-container" style="padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 15px; color: #111; background: #fff;"></div>');
-
                 const tabTitle = sideQueryInstance.name || "Side Query Session";
                 $printArea.append(`<h2 style="border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 20px;">${tabTitle} - Exported History</h2>`);
 
@@ -234,8 +289,6 @@ class SideQueryMessage {
 
                 for (let i = 0; i <= targetIndex; i++) {
                     const msg = allMessages[i];
-
-                    // Filter check: Skip processing if user prompts are hidden
                     if (msg.from_user && !includeUserPrompts) continue;
 
                     itemsAddedCount++;
@@ -252,7 +305,6 @@ class SideQueryMessage {
 
                     $msgBlock.find('div:last-child').html(messageFormatting(msg.contents, "", false, false, -1));
 
-                    // Filter check: Render reasoning metadata blocks only if allowed
                     if (msg.reasoning && includeReasoning && !msg.from_user) {
                         const $reasoningBlock = $(`
                             <div style="margin-top: 8px; padding: 8px; font-size: 0.85em; background: #f5f5f5; border-radius: 4px; color: #666; font-style: italic;">
@@ -266,7 +318,6 @@ class SideQueryMessage {
                     $printArea.append($msgBlock);
                 }
 
-                // Guard constraint: Abort file rendering if criteria leaves document empty
                 if (itemsAddedCount === 0) {
                     toastDebounced('Export aborted: Selected filter criteria results in an empty layout document.', 'warning');
                     return;
@@ -291,7 +342,6 @@ class SideQueryMessage {
                 toastDebounced('Failed to export PDF.', 'error');
             }
         });
-        // -----------------------------------------------------
 
         $container.append(this.$element);
         this._update();
@@ -300,13 +350,12 @@ class SideQueryMessage {
 
     _triggerThrottledUpdate() {
         if (!this.$element) return;
-        // If a rendering cycle is already scheduled, don't flood the engine
         if (this._updateTimeout) return;
 
         this._updateTimeout = setTimeout(() => {
             this._update();
             this._updateTimeout = null;
-        }, 150); // Cap layout recalculations to ~6 times a second max
+        }, 150);
     }
 
     forceUpdate() {
@@ -386,7 +435,23 @@ class SideQueryMessage {
 
         contentEl.innerHTML = messageFormatting(this.contents, "", false, false, -1);
 
-        // Render the generation context info block beneath the text layout
+        // Render static attachments directly beneath content flow
+        this.$element.find('.enerccio_sidequery_message_attachments_display').remove();
+        if (this.from_user && this.attachments && this.attachments.length > 0) {
+            const $attachDisplay = $('<div class="enerccio_sidequery_message_attachments_display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; padding:0 10px;"></div>');
+            this.attachments.forEach(att => {
+                const $item = $('<div class="enerccio_sidequery_attachment_display_item" style="display:flex; flex-direction:column; align-items:center; width:60px; border:1px solid var(--SmartThemeBorderColor); padding:4px; border-radius:4px; background:var(--black30a); position:relative;"></div>');
+                if (att.type && att.type.startsWith('image/')) {
+                    $item.append(`<img src="data:${att.type};base64,${att.data}" style="width:50px; height:50px; object-fit:cover; border-radius:2px; cursor:pointer;" title="Click to view full image" onclick="window.open(this.src)"/>`);
+                } else {
+                    $item.append(`<i class="fa-solid fa-file" style="font-size:24px; margin:13px 0;" title="${att.name}"></i>`);
+                }
+                $item.append(`<span style="font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;" title="${att.name}">${att.name}</span>`);
+                $attachDisplay.append($item);
+            });
+            this.$element.find('.enerccio_sidequery_message_content').after($attachDisplay);
+        }
+
         const $infoDiv = this.$element.find('.enerccio_sidequery_message_generation_info');
         if (this.genInfoText && !this.from_user) {
             $infoDiv.text(this.genInfoText).show();
@@ -465,11 +530,18 @@ class SideQueryContainer {
     }
 
     async insertUserMessage(val) {
-        const m = SideQueryMessage.fromUser(val);
+        const attachments = this.sideQuery.currentAttachments ? [...this.sideQuery.currentAttachments] : [];
+        const m = SideQueryMessage.fromUser(val, attachments);
         this.messages.push(m);
-        await m.addTo(this.$container, this.sideQuery); // Added reference parameter
-        await this.sideQuery.save();
+        await m.addTo(this.$container, this.sideQuery);
 
+        // Clear attachments queue upon delivery
+        this.sideQuery.currentAttachments = [];
+        if (this.sideQuery.renderInputAttachments) {
+            this.sideQuery.renderInputAttachments();
+        }
+
+        await this.sideQuery.save();
         await this.sideQuery.generateReply();
     }
 
@@ -499,7 +571,7 @@ class SideQueryContainer {
 
         const m = SideQueryMessage.fromAI(val, undefined, contextSummary);
         this.messages.push(m);
-        await m.addTo(this.$container, this.sideQuery); // Added reference parameter
+        await m.addTo(this.$container, this.sideQuery);
         await this.sideQuery.save();
         return m;
     }
@@ -512,7 +584,7 @@ class SideQueryContainer {
         if (chat.messages) {
             chat.messages.forEach(message => {
                 const m = SideQueryMessage.fromJSON(message);
-                m.addTo(this.$container, this.sideQuery); // Added reference parameter
+                m.addTo(this.$container, this.sideQuery);
                 this.messages.push(m);
             })
         }
@@ -528,7 +600,7 @@ class SideQueryContainer {
         let text = "";
         for (const query of queries) {
             text += query.content;
-    }
+        }
         return await countTokens(text, 0);
     }
 
@@ -667,7 +739,6 @@ class SideQueryContainer {
             }
         }
 
-        // must be AFTER world info
         if (chatMessagesData) {
             queries.push({
                 content: chatMessagesData,
@@ -748,6 +819,7 @@ class SideQuery {
         this.loaded = false;
         this.name = "";
         this.isManuallyRenamed = false;
+        this.currentAttachments = []; // Transient payload for draft messages
     }
 
     bindGlobalOptions() {
@@ -762,9 +834,7 @@ class SideQuery {
         $globalOptionsPopover.find('.enerccio_sidequery_include_scenario').prop('checked', this.includeScenario);
         $globalOptionsPopover.find('.enerccio_sidequery_macro_expand').prop('checked', this.macroExpand);
         $globalOptionsPopover.find('.enerccio_sidequery_include_messages').prop('checked', this.includeMessages);
-        $globalOptionsPopover.find('.enerccio_sidequery_include_messages').prop('checked', this.includeMessages);
-        $globalOptionsPopover.find('.enerccio_sidequery_include_actor_names').prop('checked', this.includeActorNames); // ADD THIS LINE
-        $globalOptionsPopover.find('.enerccio_sidequery_messages_count_from').val(this.messagesCount);
+        $globalOptionsPopover.find('.enerccio_sidequery_include_actor_names').prop('checked', this.includeActorNames);
         $globalOptionsPopover.find('.enerccio_sidequery_messages_count_from').val(this.messagesCount);
         $globalOptionsPopover.find('.enerccio_sidequery_messages_count_to').val(this.messagesCountTo);
 
@@ -810,12 +880,6 @@ class SideQuery {
             await this.save();
             await this.updateTokenCount();
         });
-        $globalOptionsPopover.find('.enerccio_sidequery_include_messages').on('change.tabContext', async (e) => {
-            if (this.loading) return;
-            this.includeMessages = !!$(e.target).prop('checked');
-            await this.save();
-            await this.updateTokenCount();
-        });
         $globalOptionsPopover.find('.enerccio_sidequery_include_actor_names').on('change.tabContext', async (e) => {
             if (this.loading) return;
             this.includeActorNames = !!$(e.target).prop('checked');
@@ -839,6 +903,64 @@ class SideQuery {
     async wire() {
         await this.updateButtonStates();
         this.updateSavedQueriesDropdown();
+
+        // Inject dynamic pending attachments list panel to the entry bar
+        this.$inputAttachmentsContainer = $('<div class="enerccio_sidequery_input_attachments"></div>');
+        this.$userQuery.after(this.$inputAttachmentsContainer);
+
+        this.renderInputAttachments = () => {
+            this.$inputAttachmentsContainer.empty();
+            this.currentAttachments.forEach((att, idx) => {
+                const $item = $('<div class="enerccio_sidequery_attachment_item" style="position:relative; display:flex; flex-direction:column; align-items:center; width:60px; border:1px solid var(--SmartThemeBorderColor); padding:4px; border-radius:4px; background:var(--black30a);"></div>');
+                if (att.type && att.type.startsWith('image/')) {
+                    $item.append(`<img src="data:${att.type};base64,${att.data}" style="width:50px; height:50px; object-fit:cover; border-radius:2px;"/>`);
+                } else {
+                    $item.append(`<i class="fa-solid fa-file" style="font-size:24px; margin:13px 0;"></i>`);
+                }
+                $item.append(`<span style="font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;" title="${att.name}">${att.name}</span>`);
+
+                const $delBtn = $('<button type="button" style="position:absolute; top:-4px; right:-4px; background:#ff4d4d; color:white; border:none; border-radius:5px; width:14px; height:14px; font-size:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">&times;</button>');
+                $delBtn.on('click', (ev) => {
+                    ev.stopPropagation();
+                    this.currentAttachments.splice(idx, 1);
+                    this.renderInputAttachments();
+                });
+                $item.append($delBtn);
+                this.$inputAttachmentsContainer.append($item);
+            });
+        };
+
+        // Main Query Input Message Bar Drag & Drop Listeners
+        this.$userQuery.on('dragover dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        this.$userQuery.on('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        this.$userQuery.on('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const files = e.originalEvent.dataTransfer.files;
+            if (files && files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const base64Data = ev.target.result.split(',')[1];
+                        this.currentAttachments.push({
+                            name: file.name,
+                            type: file.type,
+                            data: base64Data
+                        });
+                        this.renderInputAttachments();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
 
         this.$optionsToggle.on('click', (e) => {
             e.stopPropagation();
@@ -975,7 +1097,6 @@ class SideQuery {
                 if (val) {
                     this.$userQuery.val('');
 
-                    // Clear asterisks and reset
                     this.$savedPrompts.find('option').each((idx, el) => {
                         const val = $(el).val();
                         if (val) $(el).text(val);
@@ -992,7 +1113,6 @@ class SideQuery {
         this.$undo.on('click', async () => {
             const lastMsg = this.container.getLastMessage();
             if (lastMsg && lastMsg.from_user) {
-                // Clear asterisks and reset the selection before restoring input text
                 this.$savedPrompts.find('option').each((idx, el) => {
                     const val = $(el).val();
                     if (val) $(el).text(val);
@@ -1004,9 +1124,11 @@ class SideQuery {
             this._scrollToBottom();
             if (m && m.from_user) {
                 this.$userQuery.val(m.contents);
+                // Rollback attachments historical layer back into the active creation view state on undo hooks
+                this.currentAttachments = m.attachments ? [...m.attachments] : [];
+                this.renderInputAttachments();
             }
 
-            // Regenerate the tab name ONLY if it wasn't manually customized by the user
             if (!this.isManuallyRenamed && this.container.messages.length < 2) {
                 const tabIndex = this.parent.tabs.indexOf(this);
                 const defaultName = `Tab ${tabIndex + 1}`;
@@ -1032,11 +1154,6 @@ class SideQuery {
         });
     }
 
-    /**
-     * sets up autoscroll for the content responses
-     * @returns {Promise<void>}
-     * @private
-     */
     async _setupAutoscroll() {
         const scrollContainer = this.$responseContainer[0];
         const responseContainer = this.$responseContainer[0];
@@ -1055,8 +1172,6 @@ class SideQuery {
         };
 
         const scrollToBottom = () => {
-            // CRITICAL FIX: If the parent tab container is clearing/rebuilding the DOM headers,
-            // or if this is a background tab, completely ignore the scroll adjustments!
             if (this.parent && this.parent.isRebuildingLayout) {
                 return;
             }
@@ -1087,7 +1202,6 @@ class SideQuery {
         };
 
         scrollContainer.addEventListener('scroll', () => {
-            // Only adjust shouldAutoScroll if the layout isn't actively mutating structural headers
             if (this.parent && this.parent.isRebuildingLayout) return;
             shouldAutoScroll = isNearBottom();
         }, { passive: true });
@@ -1144,6 +1258,9 @@ class SideQuery {
         await this.updateButtonStates();
         await this.updateTokenCount();
         this.restoreScrollPosition();
+        if (this.renderInputAttachments) {
+            this.renderInputAttachments();
+        }
     }
 
     checkIfPromptModified() {
@@ -1234,7 +1351,6 @@ class SideQuery {
     }
 
     async save() {
-        // Dynamically capture the scroll offset right before writing to storage
         if (this.$responseContainer && this.$responseContainer[0]) {
             this.scrollPosition = this.$responseContainer[0].scrollTop;
         }
@@ -1352,7 +1468,6 @@ class SideQuery {
 
         const aiNamesEnabled = getSettings("enable_ai_names", false, false);
 
-        // Trigger title generation if enabled, it's the first response, and it was never manually overridden
         if (aiNamesEnabled && !this.isManuallyRenamed && this.container.messages.length === 2 && (!this.name || this.name.startsWith("Tab "))) {
             await this.generateTabTitle(profile);
         }
@@ -1375,7 +1490,6 @@ class SideQuery {
                 }
             ];
 
-            // Request a small chunk of tokens. Stream parameter matches the context capability safely.
             let titleGenFunction = await context.ConnectionManagerRequestService.sendRequest(profile, titlePrompt,
                 2048, {stream: true});
 
@@ -1383,7 +1497,6 @@ class SideQuery {
 
             if (typeof titleGenFunction === 'function') {
                 const titleGenerator = titleGenFunction();
-                // Consume the generator stream until completion loop
                 while (true) {
                     let r = await titleGenerator.next();
                     if (r.done) break;
@@ -1392,12 +1505,11 @@ class SideQuery {
                     }
                 }
             } else if (titleGenFunction && titleGenFunction.text) {
-                // Fallback wrapper if the endpoint natively ignored streaming entirely
                 resultText = titleGenFunction.text;
             }
 
-            let cleanedTitle = resultText.replace(/<think>[\s\S]*?<\/think>/gi, ""); // Strip thought blocks if present
-            cleanedTitle = cleanedTitle.replace(/["'’\.\*#]/g, "").trim(); // Remove punctuation and markdown
+            let cleanedTitle = resultText.replace(/<think>[\s\S]*?<\/think>/gi, "");
+            cleanedTitle = cleanedTitle.replace(/["'’\.\*#]/g, "").trim();
 
             if (cleanedTitle) {
                 if (cleanedTitle.length > 25) {
@@ -1415,9 +1527,7 @@ class SideQuery {
 
     async gatherQueryData() {
         const queries = [];
-
         await this.container.insertMessages(queries);
-
         return queries;
     }
 
@@ -1456,7 +1566,7 @@ class SideQueryTabs {
         this.$addTabBtn = this.$contentPane.find(`#${MODULE_NAME}_add_tab`);
         this.$infoBtn = this.$contentPane.find(`#${MODULE_NAME}_info_btn`);
         this.$infoPopover = $('#enerccio_sidequery_global_info');
-        this.currentInfoTab = 'pre'; // Track sub-view state: 'pre' or 'post'
+        this.currentInfoTab = 'pre';
 
         this.tabs = []
         this.activeTab = null;
@@ -1469,7 +1579,6 @@ class SideQueryTabs {
     }
 
     _wireInfoPopover() {
-        // Tab switching events inside the popover layout panel itself
         this.$infoPopover.find('.enerccio_sidequery_info_tab').on('click', (e) => {
             e.stopPropagation();
             this.currentInfoTab = $(e.currentTarget).data('info-tab');
@@ -1480,11 +1589,9 @@ class SideQueryTabs {
             this._updateInfoPopoverContent();
         });
 
-        // Toggle context logic for the primary information icon click
         this.$infoBtn.on('click', (e) => {
             e.stopPropagation();
 
-            // Close standard options dropdown if open to keep things clean
             $('.enerccio_sidequery_options_menu_panel').hide();
 
             const isVisible = this.$infoPopover.is(':visible');
@@ -1500,13 +1607,10 @@ class SideQueryTabs {
                 const scrollTop = $(window).scrollTop();
                 const scrollLeft = $(window).scrollLeft();
 
-                // Position flush immediately to the right edge of the info button frame
                 let leftPos = btnOffset.left + btnWidth + 6 - scrollLeft;
                 let topPos = btnOffset.top - scrollTop;
 
-                // Safety guardrails for edge-of-screen constraints
                 if (leftPos + panelWidth > $(window).width() - 10) {
-                    // Fallback: If right edge truncates workspace, flip open to the left side
                     leftPos = btnOffset.left - panelWidth - 6 - scrollLeft;
                 }
                 if (topPos + panelHeight > $(window).height() - 10) {
@@ -1526,12 +1630,10 @@ class SideQueryTabs {
             }
         });
 
-        // Suppress layout bubbling closure loops when selecting text inside textareas
         this.$infoPopover.on('click mousedown mouseup keydown keyup', (e) => {
             e.stopPropagation();
         });
 
-        // Click wrapper boundary hide routing
         $(document).on('click.info-popover-hide', (e) => {
             if (!$(e.target).closest('#enerccio_sidequery_info_btn').length) {
                 this.$infoPopover.hide();
@@ -1539,7 +1641,6 @@ class SideQueryTabs {
         });
     }
 
-    // NEW: Updates text fields dynamically using configured setting definitions
     _updateInfoPopoverContent() {
         const prePrompt = getSettings('first_message', false, '');
         const postPrompt = getSettings('before_last_message', false, '');
@@ -1584,11 +1685,9 @@ class SideQueryTabs {
             $(`#${MODULE_NAME}_query`).show();
             this.hidden = false;
             this.ensureDrawerOpen();
-            // Restore scroll for the active tab view after opening the main drawer
             const currentTab = this.tab();
             if (currentTab) currentTab.restoreScrollPosition();
         } else {
-            // Save current position state before putting elements away
             const currentTab = this.tab();
             if (currentTab) await currentTab.save();
 
@@ -1654,14 +1753,13 @@ class SideQueryTabs {
     }
 
     async updateTabs() {
-        this.isRebuildingLayout = true; // Lock scrolling loops while header DOM changes
+        this.isRebuildingLayout = true;
         this.$tabsContainer.empty();
 
         const showClose = this.tabData.length > 1;
 
         for (let i = 0; i < this.tabData.length; i++) {
             const tabName = this.tabData[i]?.name || `Tab ${i + 1}`;
-            // Added draggable="true" attribute to enable native HTML5 drag capability
             const $tabBtn = $(`
                         <div class="${MODULE_NAME}_tabbtn ${i === this.activeTab ? 'active' : ''}" data-index="${i}" draggable="true">
                             <span class="tab-title-text">${tabName}</span>
@@ -1672,20 +1770,17 @@ class SideQueryTabs {
                         </div>
                     `);
 
-            // --- Core Drag and Drop Event Routing Mechanics ---
             $tabBtn.on('dragstart', (e) => {
                 if (this.isGenerating()) {
                     e.preventDefault();
                     return;
                 }
-                // Store the index of the element being picked up
                 e.originalEvent.dataTransfer.setData('text/plain', i.toString());
                 $tabBtn.addClass('dragging');
                 e.stopPropagation();
             });
 
             $tabBtn.on('dragover', (e) => {
-                // dragover must be explicitly prevented for a valid drop area zone target
                 e.preventDefault();
                 $tabBtn.addClass('drag-over');
                 e.stopPropagation();
@@ -1711,15 +1806,12 @@ class SideQueryTabs {
 
                 if (isNaN(fromIndex) || fromIndex === toIndex) return;
 
-                // Splice and re-insert items inside tabData arrays to reorder natively
                 const [movedData] = this.tabData.splice(fromIndex, 1);
                 this.tabData.splice(toIndex, 0, movedData);
 
-                // Splice and sync running active instances array matching data indices
                 const [movedTab] = this.tabs.splice(fromIndex, 1);
                 this.tabs.splice(toIndex, 0, movedTab);
 
-                // Re-calculate focus tracker pointer position so selection follows your tab
                 if (this.activeTab === fromIndex) {
                     this.activeTab = toIndex;
                 } else if (this.activeTab > fromIndex && this.activeTab <= toIndex) {
@@ -1731,16 +1823,13 @@ class SideQueryTabs {
                 await this.updateTabs();
                 await this.save();
 
-                // Keep visually synchronized with the newly repositioned tab element view pane
                 if (this.tabs[this.activeTab]) {
                     this.$contentPane.find(`#${MODULE_NAME}_tabs_tabcontent`).children().hide();
                     this.tabs[this.activeTab].$root.show();
                     this._scrollToActiveTab();
                 }
             });
-            // ---------------------------------------------------
 
-            // Core renaming logic bundled into a clean helper function
             const startInlineRename = (e) => {
                 if (this.isGenerating()) return;
                 e.stopPropagation();
@@ -1783,7 +1872,6 @@ class SideQueryTabs {
                 });
             };
 
-            // Single click event router
             $tabBtn.on('click', (e) => {
                 if (this.isGenerating()) return;
 
@@ -1800,7 +1888,6 @@ class SideQueryTabs {
                 }
             });
 
-            // Keep double click active as an alternative convenience shortcut
             $tabBtn.on('dblclick', (e) => {
                 if ($(e.target).hasClass('close-tab') || $(e.target).hasClass('edit-tab')) return;
                 startInlineRename(e);
@@ -1917,7 +2004,6 @@ class SideQueryTabs {
         if ($globalOptionsPopover) $globalOptionsPopover.hide();
         this.isSwitchingTab = true;
         try {
-            // If there's an active tab, save its state before switching away.
             if (this.activeTab !== null && this.tabs[this.activeTab]) {
                 await this.tabs[this.activeTab].save();
             }
@@ -1932,11 +2018,10 @@ class SideQueryTabs {
     }
 
     async showActiveTab() {
-        const targetActiveTab = this.activeTab; // Snapshot the target index for this specific loop execution trace
+        const targetActiveTab = this.activeTab;
         this.$contentPane.find(`#${MODULE_NAME}_tabs_tabcontent`).children().hide();
 
         for (let i = 0; i < this.tabs.length; i++) {
-            // If the active tab index advanced under our feet due to another trigger, abort this stale loop immediately
             if (this.activeTab !== targetActiveTab) return;
 
             const t = this.tabs[i];
@@ -1944,13 +2029,11 @@ class SideQueryTabs {
 
             if (i === targetActiveTab) {
                 await t.fill();
-                // Verify structural identity parameters haven't changed during the async yield point
                 if (this.activeTab === targetActiveTab) {
                     t.$root.show();
                 }
             } else {
                 await t.trash();
-                // Safe layout allocation preparation step
                 if (this.tabs[i] && this.tabData[i]) {
                     await t.load(this.tabData[i]);
                 }
@@ -1996,7 +2079,6 @@ $(async function () {
     );
     $('body').append(globalPanelsHtml);
 
-    // Assign instances to our centralized module trackers
     $globalOptionsPopover = $('#enerccio_sidequery_global_options');
     $globalInfoPopover = $('#enerccio_sidequery_global_info');
 
@@ -2012,13 +2094,11 @@ $(async function () {
         $button.attr('disabled', !context.getCurrentChatId());
 
         if (sideQueryTabs) {
-            // 1. Proactively abort any active background text generation streams
             for (let tab of sideQueryTabs.tabs) {
                 if (tab.isGenerating()) {
                     tab.abort.abort("chatChanged");
                 }
             }
-            // 2. Clear volatile data allocations from memory to prevent stale reference leaks
             await sideQueryTabs.clear();
         }
 
