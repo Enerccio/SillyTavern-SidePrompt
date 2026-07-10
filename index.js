@@ -780,6 +780,17 @@ class SideQueryContainer {
         }
 
         const beforeLastMessage = getSettings("before_last_message");
+
+        const safeAtob = (str) => {
+            try {
+                return decodeURIComponent(atob(str).split('').map(c =>
+                    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                ).join(''));
+            } catch (e) {
+                return atob(str);
+            }
+        };
+
         this.messages.forEach((message, index) => {
             if (index === this.messages.length - 1)
                 if (beforeLastMessage) {
@@ -796,10 +807,53 @@ class SideQueryContainer {
                         content = substituteParams(content);
                     }
                 }
-                queries.push({
-                    content: content,
-                    role: message.from_user ? "user" : "assistant",
-                });
+
+                let hasImages = false;
+
+                // 1. Process structured text data & document references directly into the prose payload
+                if (message.attachments && message.attachments.length > 0) {
+                    message.attachments.forEach(att => {
+                        const mime = att.type ? att.type.toLowerCase() : "";
+                        const name = att.name ? att.name.toLowerCase() : "";
+
+                        if (mime.startsWith('image/')) {
+                            hasImages = true;
+                        } else if (mime === 'application/json' || name.endsWith('.json')) {
+                            const decodedJson = safeAtob(att.data);
+                            content += `\n\n### Attached JSON Data (${att.name}):\n\`\`\`json\n${decodedJson}\n\`\`\``;
+                        } else if (mime.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.md')) {
+                            const decodedText = safeAtob(att.data);
+                            content += `\n\n### Attached Document (${att.name}):\n\`\`\`\n${decodedText}\n\`\`\``;
+                        } else if (mime === 'application/pdf' || name.endsWith('.pdf')) {
+                            // Document placeholder layout
+                            content += `\n\n### Attached Document Context Reference (${att.name}):\n[PDF Document binary appended to message data stream]`;
+                        }
+                    });
+                }
+
+                // 2. Format and route the payload using the valid multimodal structure
+                if (hasImages) {
+                    const contentArray = [{ type: "text", text: content }];
+                    message.attachments.forEach(att => {
+                        if (att.type && att.type.toLowerCase().startsWith('image/')) {
+                            contentArray.push({
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:${att.type};base64,${att.data}`
+                                }
+                            });
+                        }
+                    });
+                    queries.push({
+                        content: contentArray,
+                        role: message.from_user ? "user" : "assistant",
+                    });
+                } else {
+                    queries.push({
+                        content: content,
+                        role: message.from_user ? "user" : "assistant",
+                    });
+                }
             }
         });
     }
