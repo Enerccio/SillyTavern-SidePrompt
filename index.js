@@ -147,25 +147,58 @@ class SideQueryMessage {
 
             if ($contentContainer.find('textarea').length > 0) return;
 
+            this.$element.find('.enerccio_sidequery_message_attachments_display').remove();
+
             const currentRawText = this.contents;
             const $textarea = $(`<textarea class="enerccio_sidequery_message_edit_input"></textarea>`).val(currentRawText);
 
-            $contentContainer.empty().append($textarea);
-            $textarea.focus();
-
-            $textarea.on('click mousedown mouseup keydown keyup', (ev) => {
-                ev.stopPropagation();
-            });
+            const $editFormWrapper = $('<div class="enerccio_sidequery_edit_form_container" style="display: flex; flex-direction: column; gap: 6px; width: 100%;"></div>');
+            $editFormWrapper.append($textarea);
 
             let tempAttachments = this.attachments ? [...this.attachments] : [];
 
-            const renderEditAttachments = () => {
-                $contentContainer.find('.enerccio_sidequery_edit_attachments_container').remove();
-                if (!this.from_user) return;
+            const $editFileInput = $('<input type="file" multiple style="display:none;"/>');
+            const $editAddAttachBtn = this.from_user ? $(`<button class="menu_button interactable" type="button" title="Upload files to this message" style="padding: 2px 6px; font-size: 0.8em; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-plus"></i> Add Attachment</button>`) : null;
 
-                const $editAttachDiv = $('<div class="enerccio_sidequery_edit_attachments_container"></div>');
+            if (this.from_user) {
+                $editFormWrapper.append($editFileInput);
+            }
+
+            const $editAttachDiv = $('<div class="enerccio_sidequery_edit_attachments_container"></div>');
+            $editFormWrapper.append($editAttachDiv);
+
+            const $editActionRow = $(`
+                <div class="enerccio_sidequery_edit_actions">
+                    <div class="enerccio_sidequery_edit_left_actions"></div>
+                    <div class="enerccio_sidequery_edit_right_actions">
+                        <button class="menu_button interactable edit-cancel" type="button" style="padding: 2px 8px; font-size: 0.85em;">Cancel</button>
+                        <button class="menu_button interactable edit-save" type="button" style="padding: 2px 8px; font-size: 0.85em; font-weight: bold; background-color: var(--SmartThemeBorderColor);">Save</button>
+                    </div>
+                </div>
+            `);
+
+            if (this.from_user && $editAddAttachBtn) {
+                $editActionRow.find('.enerccio_sidequery_edit_left_actions').append($editAddAttachBtn);
+            }
+            $editFormWrapper.append($editActionRow);
+
+            $contentContainer.empty().append($editFormWrapper);
+            $textarea.focus();
+
+            $editFormWrapper.on('click mousedown mouseup keydown keyup', (ev) => {
+                ev.stopPropagation();
+            });
+
+            const renderEditAttachments = () => {
+                $editAttachDiv.empty();
+                if (!this.from_user || tempAttachments.length === 0) {
+                    $editAttachDiv.hide();
+                    return;
+                }
+                $editAttachDiv.show();
+
                 tempAttachments.forEach((att, idx) => {
-                    const $item = $('<div class="enerccio_sidequery_attachment_item" style="position:relative; display:flex; flex-direction:column; align-items:center; width:60px; border:1px solid var(--SmartThemeBorderColor); padding:4px; border-radius:4px; background:var(--black30a);"></div>');
+                    const $item = $('<div class="enerccio_sidequery_attachment_item" style="position:relative; display:flex; flex-direction:column; align-items:center; width:60px; border:1px solid var(--SmartThemeBorderColor); padding:4px; border-radius:4px; background:var(--black30a); flex-shrink: 0;"></div>');
                     if (att.type && att.type.startsWith('image/')) {
                         $item.append(`<img src="data:${att.type};base64,${att.data}" style="width:50px; height:50px; object-fit:cover; border-radius:2px;"/>`);
                     } else {
@@ -174,11 +207,6 @@ class SideQueryMessage {
                     $item.append(`<span style="font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;" title="${att.name}">${att.name}</span>`);
 
                     const $delBtn = $('<button type="button" style="position:absolute; top:-4px; right:-4px; background:#ff4d4d; color:white; border:none; border-radius:5px; width:14px; height:14px; font-size:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">&times;</button>');
-
-                    // Retain focus on textarea during deletion via mousedown override
-                    $delBtn.on('mousedown', (ev) => {
-                        ev.preventDefault();
-                    });
                     $delBtn.on('click', (ev) => {
                         ev.stopPropagation();
                         tempAttachments.splice(idx, 1);
@@ -187,13 +215,36 @@ class SideQueryMessage {
                     $item.append($delBtn);
                     $editAttachDiv.append($item);
                 });
-                $contentContainer.append($editAttachDiv);
+            };
+
+            const handleEditFilesSelection = (files) => {
+                if (files && files.length > 0) {
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        const reader = new FileReader();
+                        reader.onload = (uploadEvent) => {
+                            const base64Data = uploadEvent.target.result.split(',')[1];
+                            tempAttachments.push({
+                                name: file.name,
+                                type: file.type,
+                                data: base64Data
+                            });
+                            renderEditAttachments();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
             };
 
             if (this.from_user) {
                 renderEditAttachments();
 
-                // Inline Editor Drag and Drop (User Messages Only)
+                $editAddAttachBtn.on('click', () => $editFileInput.trigger('click'));
+                $editFileInput.on('change', (ev) => {
+                    handleEditFilesSelection(ev.target.files);
+                    $editFileInput.val('');
+                });
+
                 $textarea.on('dragover dragenter', (ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
@@ -201,23 +252,7 @@ class SideQueryMessage {
                 $textarea.on('drop', (ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
-                    const files = ev.originalEvent.dataTransfer.files;
-                    if (files && files.length > 0) {
-                        for (let i = 0; i < files.length; i++) {
-                            const file = files[i];
-                            const reader = new FileReader();
-                            reader.onload = (uploadEvent) => {
-                                const base64Data = uploadEvent.target.result.split(',')[1];
-                                tempAttachments.push({
-                                    name: file.name,
-                                    type: file.type,
-                                    data: base64Data
-                                });
-                                renderEditAttachments();
-                            };
-                            reader.readAsDataURL(file);
-                        }
-                    }
+                    handleEditFilesSelection(ev.originalEvent.dataTransfer.files);
                 });
             }
 
@@ -235,13 +270,13 @@ class SideQueryMessage {
                 }
             };
 
-            $textarea.on('blur', saveEditedMessage);
+            $editActionRow.find('.edit-save').on('click', saveEditedMessage);
+            $editActionRow.find('.edit-cancel').on('click', () => this._update());
+
             $textarea.on('keydown', (ev) => {
                 if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-                    $textarea.off('blur');
                     saveEditedMessage();
                 } else if (ev.key === 'Escape') {
-                    $textarea.off('blur');
                     this._update();
                 }
             });
@@ -435,7 +470,6 @@ class SideQueryMessage {
 
         contentEl.innerHTML = messageFormatting(this.contents, "", false, false, -1);
 
-        // Render static attachments directly beneath content flow
         this.$element.find('.enerccio_sidequery_message_attachments_display').remove();
         if (this.from_user && this.attachments && this.attachments.length > 0) {
             const $attachDisplay = $('<div class="enerccio_sidequery_message_attachments_display" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; padding:0 10px;"></div>');
@@ -484,7 +518,7 @@ class SideQueryMessage {
                 selection.removeAllRanges();
                 selection.addRange(newRange);
             } catch (e) {
-                console.warn("Could not restore side query text selection safely during render append", e);
+                console.warn("Could not restore text selection safely", e);
             }
         }
 
@@ -535,7 +569,6 @@ class SideQueryContainer {
         this.messages.push(m);
         await m.addTo(this.$container, this.sideQuery);
 
-        // Clear attachments queue upon delivery
         this.sideQuery.currentAttachments = [];
         if (this.sideQuery.renderInputAttachments) {
             this.sideQuery.renderInputAttachments();
@@ -904,8 +937,12 @@ class SideQuery {
         await this.updateButtonStates();
         this.updateSavedQueriesDropdown();
 
-        // Inject dynamic pending attachments list panel to the entry bar
         this.$inputAttachmentsContainer = $('<div class="enerccio_sidequery_input_attachments"></div>');
+
+        const $mainFileInput = $('<input type="file" multiple style="display:none;"/>');
+        const $mainAddAttachBtn = $(`<button class="menu_button interactable" type="button" title="Upload files to your query" style="padding: 2px 6px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 4px;"><i class="fas fa-plus"></i> Add Attachment</button>`);
+
+        this.$userQuery.before($mainAddAttachBtn).before($mainFileInput);
         this.$userQuery.after(this.$inputAttachmentsContainer);
 
         this.renderInputAttachments = () => {
@@ -930,20 +967,7 @@ class SideQuery {
             });
         };
 
-        // Main Query Input Message Bar Drag & Drop Listeners
-        this.$userQuery.on('dragover dragenter', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-        this.$userQuery.on('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-        this.$userQuery.on('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            const files = e.originalEvent.dataTransfer.files;
+        const handleFilesSelection = (files) => {
             if (files && files.length > 0) {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
@@ -960,6 +984,26 @@ class SideQuery {
                     reader.readAsDataURL(file);
                 }
             }
+        };
+
+        $mainAddAttachBtn.on('click', () => $mainFileInput.trigger('click'));
+        $mainFileInput.on('change', (e) => {
+            handleFilesSelection(e.target.files);
+            $mainFileInput.val(''); // Clear form state tracker
+        });
+
+        this.$userQuery.on('dragover dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        this.$userQuery.on('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        this.$userQuery.on('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleFilesSelection(e.originalEvent.dataTransfer.files);
         });
 
         this.$optionsToggle.on('click', (e) => {
@@ -1124,7 +1168,6 @@ class SideQuery {
             this._scrollToBottom();
             if (m && m.from_user) {
                 this.$userQuery.val(m.contents);
-                // Rollback attachments historical layer back into the active creation view state on undo hooks
                 this.currentAttachments = m.attachments ? [...m.attachments] : [];
                 this.renderInputAttachments();
             }
@@ -1676,13 +1719,13 @@ class SideQueryTabs {
     }
 
     async hide() {
-        this.$root.hide();
+        this.$root.removeClass('sq-visible');
         this.hidden = true;
     }
 
     async toggleVisibility() {
         if (this.hidden) {
-            $(`#${MODULE_NAME}_query`).show();
+            this.$root.addClass('sq-visible');
             this.hidden = false;
             this.ensureDrawerOpen();
             const currentTab = this.tab();
@@ -1691,7 +1734,7 @@ class SideQueryTabs {
             const currentTab = this.tab();
             if (currentTab) await currentTab.save();
 
-            $(`#${MODULE_NAME}_query`).hide();
+            this.$root.removeClass('sq-visible');
             this.hidden = true;
         }
     }

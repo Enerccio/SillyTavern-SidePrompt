@@ -29,16 +29,20 @@
     height: min(90dvh, 720px);
 }
 
-#movingDivs #enerccio_sidequery_query,
-#enerccio_sidequery_query.drawer-content {
+#movingDivs #enerccio_sidequery_query.sq-visible,
+#enerccio_sidequery_query.drawer-content.sq-visible {
     display: flex !important;
     flex-direction: column !important;
-    height: auto !important; /* Lets panel sit compact when empty or low-content */
-    max-height: min(90dvh, 720px) !important; /* Structural ceiling boundary limit */
+    height: auto !important; /* Expansion ceiling grows with attachment loading bounds */
+    max-height: min(90dvh, 720px) !important;
     overflow: hidden !important;
 }
 
-/* Tier 2: Floating Master Frame Wrapper */
+#movingDivs #enerccio_sidequery_query:not(.sq-visible),
+#enerccio_sidequery_query.drawer-content:not(.sq-visible) {
+    display: none !important;
+}
+
 #enerccio_sidequery_query_content {
     display: flex !important;
     flex-direction: column !important;
@@ -48,7 +52,6 @@
     overflow: hidden !important;
 }
 
-/* Tier 3: Inner Drawer Structural Box */
 #enerccio_sidequery_query_content .inline-drawer {
     display: flex !important;
     flex-direction: column !important;
@@ -58,8 +61,6 @@
     overflow: hidden !important;
 }
 
-/* Tier 4: Intermediate Drawer Content Compartment.
-   CRITICAL: Changed to a direct child combinator (>) to protect internal tabs from !important display loops! */
 #enerccio_sidequery_query_content > .inline-drawer > .inline-drawer-content {
     display: flex !important;
     flex-direction: column !important;
@@ -69,7 +70,6 @@
     overflow: hidden !important;
 }
 
-/* Tier 5: Tabs Master Allocation Display Rack */
 #enerccio_sidequery_tabs_tabcontent {
     display: flex !important;
     flex-direction: column !important;
@@ -79,8 +79,6 @@
     overflow: hidden !important;
 }
 
-/* Tier 6: Individual Active Tab Workspace Panels.
-   NO !important on display! Allows inline style="display: none;" to toggle background tabs out of sight. */
 .enerccio_sidequery_query_body {
     display: flex;
     flex-direction: column !important;
@@ -91,11 +89,6 @@
     overflow: hidden !important;
 }
 
-/* =========================================================================
-   DYNAMIC INTERNAL REGIONS
-   ========================================================================= */
-
-/* The Conversation History Log: Shrinks dynamically when your text box or files grow */
 .enerccio_sidequery_response {
     display: flex;
     flex-direction: column;
@@ -105,18 +98,16 @@
     min-height: 0 !important;
 }
 
-/* Input Controls Tray: Securely anchored to the bottom row boundary floor line */
 .enerccio_sidequery_controls {
     display: flex !important;
     flex-direction: column !important;
-    flex: 0 0 auto !important; /* Shuts down input area expansion distortion */
+    flex: 0 0 auto !important;
     height: auto !important;
     min-height: 0 !important;
     margin-top: auto !important;
     box-sizing: border-box;
 }
 
-/* Input panel layout controls */
 .enerccio_sidequery_user_input {
     width: 100%;
     box-sizing: border-box;
@@ -125,7 +116,6 @@
     max-height: 100px;
 }
 
-/* Single-row scrollable file attachment rack */
 .enerccio_sidequery_input_attachments,
 .enerccio_sidequery_edit_attachments_container {
     display: flex !important;
@@ -138,7 +128,6 @@
     flex: 0 0 auto !important;
 }
 
-/* Low-profile sliders for pending file arrays */
 .enerccio_sidequery_input_attachments::-webkit-scrollbar,
 .enerccio_sidequery_edit_attachments_container::-webkit-scrollbar {
     height: 4px;
@@ -224,7 +213,6 @@
     justify-self: end;
     text-align: right;
 }
-
 
 .enerccio_sidequery_message_copy {
     grid-column: 2;
@@ -314,7 +302,6 @@
     content: none !important;
 }
 
-/* Styling cues for active drag and drop actions */
 .enerccio_sidequery_tabbtn.dragging {
     opacity: 0.4;
     border: 1px dashed var(--SmartThemeBorderColor) !important;
@@ -326,7 +313,6 @@
     transition: transform 0.1s ease;
 }
 
-/* Increase message input size dimensions and padding */
 .enerccio_sidequery_controls input[type="number"].enerccio_sidequery_messages_count_from,
 .enerccio_sidequery_controls input[type="number"].enerccio_sidequery_messages_count_to,
 #enerccio_sidequery_global_options input[type="number"].enerccio_sidequery_messages_count_from,
@@ -338,7 +324,6 @@
     box-sizing: border-box;
 }
 
-/* Message context exclusion treatments */
 .enerccio_sidequery_message.excluded-context {
     opacity: 0.5;
     border-style: dashed !important;
@@ -348,7 +333,6 @@
     color: #ff4d4d !important;
 }
 
-/* Inline message editing input field */
 .enerccio_sidequery_message_edit_input {
     width: 100%;
     min-height: 80px;
@@ -366,10 +350,9 @@
 .enerccio_sidequery_tabbtn .edit-tab:hover,
 .enerccio_sidequery_message_pdf:hover i {
     opacity: 1 !important;
-    color: #ff4d4d !important; /* Soft red indicator for PDF files */
+    color: #ff4d4d !important;
 }
 
-/* PDF Filter Dropdown Overlay Styles */
 .enerccio_sidequery_pdf_menu {
     display: none;
     position: absolute;
@@ -409,7 +392,6 @@
     color: #ff4d4d !important;
 }
 
-/* Generation info layout styles */
 .enerccio_sidequery_message_generation_info {
     font-size: 0.75em;
     opacity: 0.45;
@@ -419,7 +401,6 @@
     color: var(--text-color);
 }
 
-/* Explicitly hide this info element entirely during print media generation queries */
 @media print {
     .enerccio_sidequery_message_generation_info {
         display: none !important;
@@ -437,7 +418,6 @@
     -webkit-user-select: none !important;
 }
 
-/* Fixed Drop-Up Menu Override */
 .enerccio_sidequery_options_menu_panel {
     display: none;
     flex-direction: column;
@@ -449,12 +429,8 @@
     border-radius: var(--border-radius-small);
     padding: 12px;
     box-shadow: 0 4px 12px var(--black70a);
-
-    /* CHANGE: Swapped to fixed to cleanly escape parent overflow: hidden elements */
     position: fixed;
-    z-index: 6500; /* Stands safely on top of message logs */
-
-    /* Clear absolute layout bindings so JavaScript handles coordinates */
+    z-index: 6500;
     bottom: auto;
     right: auto;
     top: auto !important;
@@ -469,14 +445,13 @@
 
 }
 
-/* Settings Page Dedicated Popup Overlay Windows */
 .enerccio_sidequery_settings_modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 99999; /* Stands safely over standard application workspace tiers */
+    z-index: 99999;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -514,7 +489,6 @@
     color: var(--text-color);
 }
 
-/* Prompt Context Preview Popover Layout Rules */
 .enerccio_sidequery_info_panel {
     display: none;
     flex-direction: column;
@@ -526,8 +500,6 @@
     border-radius: var(--border-radius-small, 4px);
     padding: 10px;
     box-shadow: 0 4px 14px var(--black70a);
-
-    /* Avoid parent containment boundaries entirely */
     position: fixed;
     z-index: 7000;
 }
@@ -580,4 +552,48 @@
     resize: none;
     box-sizing: border-box;
     outline: none;
+}
+
+.enerccio_sidequery_edit_form_container {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.enerccio_sidequery_edit_form_container button {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.enerccio_sidequery_edit_actions {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin-top: 4px !important;
+}
+
+.enerccio_sidequery_edit_right_actions {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    align-items: center !important;
+}
+
+.enerccio_sidequery_message_edit_input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
 }
