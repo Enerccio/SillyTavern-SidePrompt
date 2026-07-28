@@ -149,6 +149,13 @@ export function getPreset(profile, context) {
         } else {
             preset = presetManager.getSelectedPreset();
         }
+        if (selectedApiMap.selected === 'openai') {
+            return {
+                genamt: preset.openai_max_tokens,
+                max_length: preset.openai_max_context,
+                raw_preset: preset,
+            };
+        }
         return presetManager.getPresetSettings(preset);
     }
     return null;
